@@ -13870,6 +13870,21 @@ class wf {
   animate() {
     requestAnimationFrame(() => this.animate()), this.controls && this.controls.update(), this.renderer.render(this.scene, this.camera);
   }
+  // Public method to update settings
+  updateSettings(e) {
+    if (Object.assign(this.settings, e), e.backgroundColor && this.renderer && this.renderer.setClearColor(new ke(e.backgroundColor)), e.particleColor && this.particles && this.particles.material.color.set(e.particleColor), e.particleSize && this.particles && this.pointCloudData) {
+      const t = this.pointCloudData.metadata.originalModelSize || 1, n = e.particleSize * (t / 100);
+      this.particles.material.size = n;
+    }
+  }
+  // Public method to load new JSON data
+  async loadNewData(e) {
+    this.jsonUrl = e, await this.loadJSONPointCloudFromURL();
+  }
+  // Cleanup method for proper disposal
+  destroy() {
+    this.animationId && (cancelAnimationFrame(this.animationId), this.animationId = null), this.particles && (this.particles.geometry.dispose(), this.particles.material.dispose(), this.scene.remove(this.particles)), this.particleTexture && this.particleTexture.dispose(), this.renderer && (this.renderer.dispose(), this.container && this.renderer.domElement.parentNode === this.container && this.container.removeChild(this.renderer.domElement)), this.resizeObserver && this.resizeObserver.disconnect(), this.container && (this.container.innerHTML = ""), console.log("JSONPointCloudViewer destroyed");
+  }
 }
 export {
   wf as default

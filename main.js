@@ -285,4 +285,71 @@ export default class JSONPointCloudViewer {
 
         this.renderer.render(this.scene, this.camera);
     }
+
+    // Public method to update settings
+    updateSettings(newSettings) {
+        Object.assign(this.settings, newSettings);
+
+        // Update background color
+        if (newSettings.backgroundColor && this.renderer) {
+            this.renderer.setClearColor(new THREE.Color(newSettings.backgroundColor));
+        }
+
+        // Update particle color
+        if (newSettings.particleColor && this.particles) {
+            this.particles.material.color.set(newSettings.particleColor);
+        }
+
+        // Update particle size
+        if (newSettings.particleSize && this.particles && this.pointCloudData) {
+            const originalModelSize = this.pointCloudData.metadata.originalModelSize || 1;
+            const newSize = newSettings.particleSize * (originalModelSize / 100);
+            this.particles.material.size = newSize;
+        }
+    }
+
+    // Public method to load new JSON data
+    async loadNewData(jsonUrl) {
+        this.jsonUrl = jsonUrl;
+        await this.loadJSONPointCloudFromURL();
+    }
+
+    // Cleanup method for proper disposal
+    destroy() {
+        // Stop animation loop
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+
+        // Dispose of Three.js objects
+        if (this.particles) {
+            this.particles.geometry.dispose();
+            this.particles.material.dispose();
+            this.scene.remove(this.particles);
+        }
+
+        if (this.particleTexture) {
+            this.particleTexture.dispose();
+        }
+
+        if (this.renderer) {
+            this.renderer.dispose();
+            if (this.container && this.renderer.domElement.parentNode === this.container) {
+                this.container.removeChild(this.renderer.domElement);
+            }
+        }
+
+        // Clean up resize observer
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+        }
+
+        // Clear container
+        if (this.container) {
+            this.container.innerHTML = '';
+        }
+
+        console.log('JSONPointCloudViewer destroyed');
+    }
 }
