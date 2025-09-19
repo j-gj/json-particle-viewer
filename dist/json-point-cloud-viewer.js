@@ -13756,23 +13756,30 @@ class Rf extends An {
   }
 }
 class wf {
-  constructor() {
-    this.scene = new Sf(), this.camera = new wt(75, window.innerWidth / window.innerHeight, 0.1, 8e3), this.renderer = new ro({ antialias: !0, preserveDrawingBuffer: !0 }), this.controls = null, this.particles = null, this.pointCloudData = null, this.particleTexture = this.createParticleTexture();
-    const e = new URLSearchParams(window.location.search);
+  constructor(e, t = {}) {
+    this.scene = new Sf(), this.camera = new wt(75, 1, 0.1, 8e3), this.renderer = new ro({ antialias: !0, preserveDrawingBuffer: !0 }), this.controls = null, this.particles = null, this.pointCloudData = null, this.particleTexture = this.createParticleTexture();
+    const n = new URLSearchParams(window.location.search);
     this.settings = {
-      particleSize: 0.1,
-      particleColor: e.get("particleColor") || e.get("particle_color") || "#372CD5",
-      backgroundColor: e.get("backgroundColor") || e.get("background_color") || "#ffffff"
-    }, this.jsonUrl = e.get("url") || e.get("jsonUrl") || "https://gmxkwskcrqq1xoty.public.blob.vercel-storage.com/particle-cloud-turbine-246000pts.json", console.log("Point Cloud Viewer Configuration:", {
+      particleSize: t.particleSize || 0.1,
+      particleColor: n.get("particleColor") || n.get("particle_color") || t.particleColor || "#372CD5",
+      backgroundColor: n.get("backgroundColor") || n.get("background_color") || t.backgroundColor || "#ffffff"
+    }, this.jsonUrl = n.get("url") || n.get("jsonUrl") || "https://gmxkwskcrqq1xoty.public.blob.vercel-storage.com/particle-cloud-turbine-246000pts.json", console.log("Point Cloud Viewer Configuration:", {
       jsonUrl: this.jsonUrl,
       particleColor: this.settings.particleColor,
       backgroundColor: this.settings.backgroundColor
-    }), this.init();
+    }), this.container = e, this.init();
   }
   init() {
-    this.renderer.setSize(window.innerWidth, window.innerHeight), this.renderer.setClearColor(new ke(this.settings.backgroundColor)), document.getElementById("point-cloud-container").appendChild(this.renderer.domElement), this.camera.position.set(5, 5, 5), this.camera.lookAt(0, 0, 0), this.setupControls();
-    const t = new bf(4210752, 0.1);
-    this.scene.add(t), this.setupEventListeners(), this.loadJSONPointCloudFromURL(), this.animate();
+    if (this.container) {
+      const t = this.container.clientWidth, n = this.container.clientHeight;
+      this.camera.aspect = t / n, this.camera.updateProjectionMatrix(), this.renderer.setSize(t, n), this.renderer.setClearColor(new ke(this.settings.backgroundColor)), this.renderer.setPixelRatio(window.devicePixelRatio), this.container.appendChild(this.renderer.domElement);
+    } else {
+      console.error("Container element not provided!");
+      return;
+    }
+    this.camera.position.set(5, 5, 5), this.camera.lookAt(0, 0, 0), this.setupControls();
+    const e = new bf(4210752, 0.1);
+    this.scene.add(e), this.setupEventListeners(), this.loadJSONPointCloudFromURL(), this.animate();
   }
   setupControls() {
     this.controls = new Rf(this.camera, this.renderer.domElement), this.controls.enableDamping = !0, this.controls.dampingFactor = 0.05, this.controls.screenSpacePanning = !0, this.controls.enableZoom = !1, this.controls.update();
@@ -13780,8 +13787,16 @@ class wf {
   setupEventListeners() {
     window.addEventListener("resize", this.onWindowResize.bind(this), !1);
   }
+  // onWindowResize() {
+  //     this.camera.aspect = window.innerWidth / window.innerHeight;
+  //     this.camera.updateProjectionMatrix();
+  //     this.renderer.setSize(window.innerWidth, window.innerHeight);
+  // }
   onWindowResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight, this.camera.updateProjectionMatrix(), this.renderer.setSize(window.innerWidth, window.innerHeight);
+    if (this.container) {
+      const e = this.container.clientWidth, t = this.container.clientHeight;
+      this.camera.aspect = e / t, this.camera.updateProjectionMatrix(), this.renderer.setSize(e, t);
+    }
   }
   createParticleTexture() {
     const e = document.createElement("canvas");
