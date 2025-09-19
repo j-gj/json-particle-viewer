@@ -92,7 +92,13 @@ export default class JSONPointCloudViewer {
     }
 
     setupEventListeners() {
-        window.addEventListener('resize', this.onWindowResize.bind(this), false);
+        if (this.container) {
+            this.resizeObserver = new ResizeObserver(() => {
+                this.onWindowResize();
+            });
+            this.resizeObserver.observe(this.container);
+        }
+        // window.addEventListener('resize', this.onWindowResize.bind(this), false);
     }
 
     // onWindowResize() {

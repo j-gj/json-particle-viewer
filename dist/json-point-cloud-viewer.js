@@ -13785,7 +13785,9 @@ class wf {
     this.controls = new Rf(this.camera, this.renderer.domElement), this.controls.enableDamping = !0, this.controls.dampingFactor = 0.05, this.controls.screenSpacePanning = !0, this.controls.enableZoom = !1, this.controls.update();
   }
   setupEventListeners() {
-    window.addEventListener("resize", this.onWindowResize.bind(this), !1);
+    this.container && (this.resizeObserver = new ResizeObserver(() => {
+      this.onWindowResize();
+    }), this.resizeObserver.observe(this.container));
   }
   // onWindowResize() {
   //     this.camera.aspect = window.innerWidth / window.innerHeight;
