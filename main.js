@@ -1,38 +1,63 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-class JSONPointCloudViewer {
-    constructor() {
+export default class JSONPointCloudViewer {
+    constructor(container, options = {}) {
+        // Validate container
+        if (!container) {
+            throw new Error('Container element is required');
+        }
+        
+        this.container = container;
         this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 8000);
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        this.camera = null;
+        this.renderer = null;
         this.controls = null;
         this.particles = null;
         this.pointCloudData = null;
         this.particleTexture = this.createParticleTexture();
+        this.animationId = null;
 
-        // Hardcoded settings
+        // Settings with options override
         this.settings = {
-            particleSize: 0.1,
-            particleColor: '#372CD5',
-            backgroundColor: '#fff'
+            particleSize: options.particleSize || 0.1,
+            particleColor: options.particleColor || '#372CD5',
+            backgroundColor: options.backgroundColor || '#ffffff'
         };
 
-        // URL to your JSON point cloud file
-        this.jsonUrl = 'https://gmxkwskcrqq1xoty.public.blob.vercel-storage.com/particle-cloud-turbine-246000pts.json';
+        // JSON URL from options
+        this.jsonUrl = options.jsonUrl || options.url || 'https://gmxkwskcrqq1xoty.public.blob.vercel-storage.com/particle-cloud-turbine-246000pts.json';
+
+        // Log the configuration for debugging
+        console.log('Point Cloud Viewer Configuration:', {
+            jsonUrl: this.jsonUrl,
+            particleColor: this.settings.particleColor,
+            backgroundColor: this.settings.backgroundColor,
+            particleSize: this.settings.particleSize
+        });
 
         this.init();
     }
 
     init() {
-        // Setup renderer
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setClearColor(new THREE.Color(this.settings.backgroundColor));
-        document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+        // Get container dimensions
+        const rect = this.container.getBoundingClientRect();
+        const width = rect.width || 800;
+        const height = rect.height || 600;
 
         // Setup camera
+        this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 8000);
         this.camera.position.set(5, 5, 5);
         this.camera.lookAt(0, 0, 0);
+
+        // Setup renderer
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        this.renderer.setSize(width, height);
+        this.renderer.setClearColor(new THREE.Color(this.settings.backgroundColor));
+        
+        // Clear container and append renderer
+        this.container.innerHTML = '';
+        this.container.appendChild(this.renderer.domElement);
 
         // Setup orbit controls (disable zoom)
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -46,18 +71,42 @@ class JSONPointCloudViewer {
         const ambientLight = new THREE.AmbientLight(0x404040, 0.1);
         this.scene.add(ambientLight);
 
-        // Window resize handler
-        window.addEventListener('resize', () => {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        // Setup resize observer for responsive behavior
+        this.setupResizeObserver();
 
         // Load the point cloud from URL
         this.loadJSONPointCloudFromURL();
 
         // Start render loop
         this.animate();
+    }
+
+    setupResizeObserver() {
+        if (typeof ResizeObserver !== 'undefined') {
+            this.resizeObserver = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    const { width, height } = entry.contentRect;
+                    if (width > 0 && height > 0) {
+                        this.handleResize(width, height);
+                    }
+                }
+            });
+            this.resizeObserver.observe(this.container);
+        } else {
+            // Fallback for older browsers
+            window.addEventListener('resize', () => {
+                const rect = this.container.getBoundingClientRect();
+                this.handleResize(rect.width, rect.height);
+            });
+        }
+    }
+
+    handleResize(width, height) {
+        if (this.camera && this.renderer) {
+            this.camera.aspect = width / height;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(width, height);
+        }
     }
 
     createParticleTexture() {
@@ -74,11 +123,7 @@ class JSONPointCloudViewer {
     }
 
     async loadJSONPointCloudFromURL() {
-        const error = document.getElementById('error');
-        
         try {
-            error.style.display = 'none';
-
             const response = await fetch(this.jsonUrl);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -86,14 +131,11 @@ class JSONPointCloudViewer {
 
             const jsonData = await response.json();
             this.processPointCloud(jsonData);
+            
+            console.log('Point cloud loaded successfully!');
         } catch (err) {
             console.error('Error loading point cloud:', err);
-            error.style.display = 'block';
-            
-            // Hide error after 5 seconds
-            setTimeout(() => {
-                error.style.display = 'none';
-            }, 5000);
+            this.showError('Failed to load point cloud data');
         }
     }
 
@@ -112,7 +154,6 @@ class JSONPointCloudViewer {
         if (this.particles) {
             this.scene.add(this.particles);
             this.fitCameraToPointCloud();
-            console.log('Point cloud loaded successfully!');
         } else {
             throw new Error('Could not create point cloud from data');
         }
@@ -142,7 +183,7 @@ class JSONPointCloudViewer {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         
-        // Use hardcoded particle size
+        // Use settings particle size
         const baseSize = this.settings.particleSize * (originalModelSize / 100);
         
         const material = new THREE.PointsMaterial({
@@ -224,18 +265,112 @@ class JSONPointCloudViewer {
         console.log('Camera auto-fitted to point cloud');
     }
 
+    showError(message) {
+        this.container.innerHTML = `
+            <div style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                color: #ff6b6b;
+                font-family: Arial, sans-serif;
+                text-align: center;
+                padding: 20px;
+            ">
+                <div>
+                    <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+                    <div style="font-size: 16px;">${message}</div>
+                </div>
+            </div>
+        `;
+    }
+
     animate() {
-        requestAnimationFrame(() => this.animate());
+        this.animationId = requestAnimationFrame(() => this.animate());
         
         if (this.controls) {
             this.controls.update();
         }
         
-        this.renderer.render(this.scene, this.camera);
+        if (this.renderer && this.scene && this.camera) {
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    // Public method to update settings
+    updateSettings(newSettings) {
+        Object.assign(this.settings, newSettings);
+        
+        // Update background color
+        if (newSettings.backgroundColor && this.renderer) {
+            this.renderer.setClearColor(new THREE.Color(newSettings.backgroundColor));
+        }
+        
+        // Update particle color
+        if (newSettings.particleColor && this.particles) {
+            this.particles.material.color.set(newSettings.particleColor);
+        }
+        
+        // Update particle size
+        if (newSettings.particleSize && this.particles && this.pointCloudData) {
+            const originalModelSize = this.pointCloudData.metadata.originalModelSize || 1;
+            const newSize = newSettings.particleSize * (originalModelSize / 100);
+            this.particles.material.size = newSize;
+        }
+    }
+
+    // Public method to load new JSON data
+    async loadNewData(jsonUrl) {
+        this.jsonUrl = jsonUrl;
+        await this.loadJSONPointCloudFromURL();
+    }
+
+    // Cleanup method for proper disposal
+    destroy() {
+        // Stop animation loop
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+
+        // Dispose of Three.js objects
+        if (this.particles) {
+            this.particles.geometry.dispose();
+            this.particles.material.dispose();
+            this.scene.remove(this.particles);
+        }
+
+        if (this.particleTexture) {
+            this.particleTexture.dispose();
+        }
+
+        if (this.renderer) {
+            this.renderer.dispose();
+            if (this.container && this.renderer.domElement.parentNode === this.container) {
+                this.container.removeChild(this.renderer.domElement);
+            }
+        }
+
+        // Clean up resize observer
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+        }
+
+        // Clear container
+        if (this.container) {
+            this.container.innerHTML = '';
+        }
+
+        console.log('JSONPointCloudViewer destroyed');
     }
 }
 
-// Initialize the viewer when the window loads
-window.addEventListener('DOMContentLoaded', () => {
-    new JSONPointCloudViewer();
-});
+// For local development - auto-instantiate if there's a #point-cloud-container
+if (typeof window !== 'undefined' && document.getElementById('point-cloud-container')) {
+    window.addEventListener('DOMContentLoaded', () => {
+        const container = document.getElementById('point-cloud-container');
+        if (container) {
+            new JSONPointCloudViewer(container);
+        }
+    });
+}
