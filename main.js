@@ -8,7 +8,10 @@ export default class JSONPointCloudViewer {
         backgroundColor: '#ffffff',
         autoRotate: true,
         rotationSpeed: 0.1,
-        url: 'https://gmxkwskcrqq1xoty.public.blob.vercel-storage.com/particle-cloud-turbine-344000pts.json'
+        url: 'https://gmxkwskcrqq1xoty.public.blob.vercel-storage.com/particle-cloud-turbine-344000pts.json',
+        enableProgressiveLoading: false,
+        chunkSize: 10000,
+        onProgress: null,
     }) {
         this.container = containerElement; // Accept container element directly
         this.scene = new THREE.Scene();
@@ -22,20 +25,16 @@ export default class JSONPointCloudViewer {
         this.resizeObserver = null;
 
         this.settings = {
+            url: options.url,
             particleSize: options.particleSize,
             particleColor: options.particleColor,
             backgroundColor: options.backgroundColor,
             autoRotate: options.autoRotate,
-            rotationSpeed: options.rotationSpeed
+            rotationSpeed: options.rotationSpeed,
+            enableProgressiveLoading: options.enableProgressiveLoading,
+            chunkSize: options.chunkSize,
+            onProgress: options.onProgress,
         };
-
-        this.jsonUrl = options.url;
-
-        console.log('Point Cloud Viewer Configuration:', {
-            jsonUrl: this.jsonUrl,
-            particleColor: this.settings.particleColor,
-            backgroundColor: this.settings.backgroundColor
-        });
 
         this.init();
     }
@@ -164,17 +163,109 @@ export default class JSONPointCloudViewer {
 
     async loadJSONPointCloudFromURL() {
         try {
-            const response = await fetch(this.jsonUrl);
+            const response = await fetch(this.settings.url);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            const jsonData = await response.json();
-            this.processPointCloud(jsonData);
+            // Check if progressive loading is enabled
+            if (this.settings.enableProgressiveLoading) {
+                await this.processPointCloudProgressively(response);
+            } else {
+                const jsonData = await response.json();
+                this.processPointCloud(jsonData);
+            }
         } catch (err) {
             console.error('Error loading point cloud:', err);
-            // In React context, you might want to emit an event or call a callback
             this.onError?.(err);
+        }
+    }
+
+    async processPointCloudProgressively(response) {
+        const jsonData = await response.json();
+
+        // Clear existing particles
+        if (this.particles) {
+            this.scene.remove(this.particles);
+        }
+
+        this.pointCloudData = jsonData;
+        const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+
+        if (!data.particles || !data.metadata) {
+            console.error('Invalid JSON format: missing particles or metadata');
+            return;
+        }
+
+        const particles = data.particles;
+        const quantizationFactor = data.metadata.quantizationFactor || 1;
+        const originalModelSize = data.metadata.originalModelSize || 1;
+        const chunkSize = this.settings.chunkSize || 10000;
+
+        // Create initial empty geometry
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particles.length * 3);
+
+        // Create material
+        const baseSize = this.settings.particleSize * (originalModelSize / 100);
+        const material = new THREE.PointsMaterial({
+            color: new THREE.Color(this.settings.particleColor),
+            size: baseSize,
+            sizeAttenuation: true,
+            transparent: true,
+            opacity: 0.8,
+            map: this.particleTexture,
+            alphaTest: 0.5
+        });
+
+        this.particles = new THREE.Points(geometry, material);
+        this.scene.add(this.particles);
+
+        // Process particles in chunks using requestIdleCallback
+        let processedCount = 0;
+
+        const processChunk = () => {
+            const startTime = performance.now();
+            const chunkEnd = Math.min(processedCount + chunkSize, particles.length);
+
+            // Process chunk
+            for (let i = processedCount; i < chunkEnd; i++) {
+                const point = particles[i];
+                positions[i * 3] = point[0] / quantizationFactor;
+                positions[i * 3 + 1] = point[1] / quantizationFactor;
+                positions[i * 3 + 2] = point[2] / quantizationFactor;
+            }
+
+            // Update geometry
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, chunkEnd * 3), 3));
+            geometry.attributes.position.needsUpdate = true;
+
+            processedCount = chunkEnd;
+            const progress = processedCount / particles.length;
+
+            // Call progress callback
+            if (this.settings.onProgress) {
+                this.settings.onProgress(progress);
+            }
+
+            if (processedCount < particles.length) {
+                // Use requestIdleCallback for non-blocking processing
+                if (window.requestIdleCallback) {
+                    window.requestIdleCallback(processChunk, { timeout: 16 });
+                } else {
+                    setTimeout(processChunk, 0);
+                }
+            } else {
+                // Finished loading - fit camera
+                this.fitCameraToPointCloud();
+            }
+        };
+
+        // Start processing
+        if (window.requestIdleCallback) {
+            window.requestIdleCallback(processChunk, { timeout: 16 });
+        } else {
+            setTimeout(processChunk, 0);
         }
     }
 
@@ -332,7 +423,7 @@ export default class JSONPointCloudViewer {
     }
 
     async loadNewData(jsonUrl) {
-        this.jsonUrl = jsonUrl;
+        this.settings.url = jsonUrl;
         await this.loadJSONPointCloudFromURL();
     }
 
