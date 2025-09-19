@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Arial', sans-serif;
-            background: #000000;
+            background: #ffffff;
             color: white;
             overflow: hidden;
         }
@@ -30,14 +30,12 @@
             position: relative;
         }
 
-
-
         #error {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(255, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.9);
             padding: 20px 40px;
             border-radius: 10px;
             display: none;
@@ -55,7 +53,13 @@
             <p>Error loading point cloud</p>
         </div>
     </div>
-
-    <script type="module" src="/main.js"></script>
+    
+    <script type="module">
+        import JSONPointCloudViewer from './main.js';
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            new JSONPointCloudViewer();
+        });
+    </script>
 </body>
 </html>
