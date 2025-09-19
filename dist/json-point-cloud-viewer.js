@@ -13756,14 +13756,19 @@ class Rf extends An {
   }
 }
 class wf {
-  constructor() {
-    this.scene = new Sf(), this.camera = new wt(75, window.innerWidth / window.innerHeight, 0.1, 8e3), this.renderer = new ro({ antialias: !0, preserveDrawingBuffer: !0 }), this.controls = null, this.particles = null, this.pointCloudData = null, this.particleTexture = this.createParticleTexture();
-    const e = new URLSearchParams(window.location.search);
-    this.settings = {
-      particleSize: 0.1,
-      particleColor: e.get("particleColor") || e.get("particle_color") || "#372CD5",
-      backgroundColor: e.get("backgroundColor") || e.get("background_color") || "#ffffff"
-    }, this.jsonUrl = e.get("url") || e.get("jsonUrl") || "https://gmxkwskcrqq1xoty.public.blob.vercel-storage.com/particle-cloud-turbine-246000pts.json", console.log("Point Cloud Viewer Configuration:", {
+  constructor(e = {
+    particleSize: 0.1,
+    particleColor: "#372CD5",
+    backgroundColor: "#ffffff",
+    autoRotate: !0,
+    rotationSpeed: 0.1,
+    url: "https://gmxkwskcrqq1xoty.public.blob.vercel-storage.com/particle-cloud-turbine-344000pts.json"
+  }) {
+    this.scene = new Sf(), this.camera = new wt(75, window.innerWidth / window.innerHeight, 0.1, 8e3), this.renderer = new ro({ antialias: !0, preserveDrawingBuffer: !0 }), this.controls = null, this.particles = null, this.pointCloudData = null, this.particleTexture = this.createParticleTexture(), new URLSearchParams(window.location.search), this.settings = {
+      particleSize: e.particleSize,
+      particleColor: e.particleColor,
+      backgroundColor: e.backgroundColor
+    }, this.jsonUrl = e.url, console.log("Point Cloud Viewer Configuration:", {
       jsonUrl: this.jsonUrl,
       particleColor: this.settings.particleColor,
       backgroundColor: this.settings.backgroundColor
@@ -13775,7 +13780,7 @@ class wf {
     this.scene.add(t), this.setupEventListeners(), this.loadJSONPointCloudFromURL(), this.animate();
   }
   setupControls() {
-    this.controls = new Rf(this.camera, this.renderer.domElement), this.controls.enableDamping = !0, this.controls.dampingFactor = 0.05, this.controls.screenSpacePanning = !0, this.controls.enableZoom = !1, this.controls.update();
+    this.controls = new Rf(this.camera, this.renderer.domElement), this.controls.enableDamping = !0, this.controls.dampingFactor = 0.05, this.controls.autoRotate = !0, this.controls.rotationSpeed = 0.1, this.controls.screenSpacePanning = !0, this.controls.enableZoom = !1, this.controls.update();
   }
   setupEventListeners() {
     window.addEventListener("resize", this.onWindowResize.bind(this), !1);
@@ -13806,7 +13811,7 @@ class wf {
   }
   processPointCloud(e) {
     if (this.particles && this.scene.remove(this.particles), this.pointCloudData = e, this.particles = this.loadPointCloudFromJSON(e), this.particles)
-      this.scene.add(this.particles), this.fitCameraToPointCloud(), console.log("Point cloud loaded successfully!");
+      this.scene.add(this.particles), this.fitCameraToPointCloud();
     else
       throw new Error("Could not create point cloud from data");
   }
@@ -13845,15 +13850,30 @@ class wf {
         c.spherical.phi,
         c.spherical.theta
       ), d = new I();
-      d.setFromSpherical(f), d.add(u), this.camera.position.copy(d), this.camera.lookAt(u), this.controls && (this.controls.target.copy(u), this.controls.update()), console.log("Camera position restored from saved data");
+      d.setFromSpherical(f), d.add(u), this.camera.position.copy(d), this.camera.lookAt(u), this.controls && (this.controls.target.copy(u), this.controls.update());
       return;
     }
     this.particles.geometry.computeBoundingBox();
     const e = this.particles.geometry.boundingBox, t = e.getSize(new I()), n = e.getCenter(new I()), s = Math.max(t.x, t.y, t.z) / (2 * Math.atan(Math.PI * this.camera.fov / 360)), o = s / this.camera.aspect, a = 1.2 * Math.max(s, o), l = new I(1, 1, 1).normalize().multiplyScalar(a);
-    this.camera.position.copy(n).add(l), this.controls && (this.controls.target.copy(n), this.controls.update()), console.log("Camera auto-fitted to point cloud");
+    this.camera.position.copy(n).add(l), this.controls && (this.controls.target.copy(n), this.controls.update());
   }
   animate() {
     requestAnimationFrame(() => this.animate()), this.controls && this.controls.update(), this.renderer.render(this.scene, this.camera);
+  }
+  // Public method to update settings
+  updateSettings(e) {
+    if (Object.assign(this.settings, e), e.backgroundColor && this.renderer && this.renderer.setClearColor(new ke(e.backgroundColor)), e.particleColor && this.particles && this.particles.material.color.set(e.particleColor), e.particleSize && this.particles && this.pointCloudData) {
+      const t = this.pointCloudData.metadata.originalModelSize || 1, n = e.particleSize * (t / 100);
+      this.particles.material.size = n;
+    }
+  }
+  // Public method to load new JSON data
+  async loadNewData(e) {
+    this.jsonUrl = e, await this.loadJSONPointCloudFromURL();
+  }
+  // Cleanup method for proper disposal
+  destroy() {
+    this.animationId && (cancelAnimationFrame(this.animationId), this.animationId = null), this.particles && (this.particles.geometry.dispose(), this.particles.material.dispose(), this.scene.remove(this.particles)), this.particleTexture && this.particleTexture.dispose(), this.renderer && (this.renderer.dispose(), this.container && this.renderer.domElement.parentNode === this.container && this.container.removeChild(this.renderer.domElement)), this.resizeObserver && this.resizeObserver.disconnect(), this.container && (this.container.innerHTML = ""), console.log("JSONPointCloudViewer destroyed");
   }
 }
 export {

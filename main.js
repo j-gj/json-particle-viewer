@@ -2,7 +2,14 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export default class JSONPointCloudViewer {
-    constructor() {
+    constructor(options = {
+        particleSize: 0.1,
+        particleColor: '#372CD5',
+        backgroundColor: '#ffffff',
+        autoRotate: true,
+        rotationSpeed: 0.1,
+        url: 'https://gmxkwskcrqq1xoty.public.blob.vercel-storage.com/particle-cloud-turbine-344000pts.json'
+    }) {
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 8000);
         this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -12,14 +19,14 @@ export default class JSONPointCloudViewer {
         this.particleTexture = this.createParticleTexture();
 
         const urlParams = new URLSearchParams(window.location.search);
-        
+
         this.settings = {
-            particleSize: 0.1,
-            particleColor: urlParams.get('particleColor') || urlParams.get('particle_color') || '#372CD5',
-            backgroundColor: urlParams.get('backgroundColor') || urlParams.get('background_color') || '#ffffff'
+            particleSize: options.particleSize,
+            particleColor: options.particleColor,
+            backgroundColor: options.backgroundColor
         };
 
-        this.jsonUrl = urlParams.get('url') || urlParams.get('jsonUrl') || 'https://gmxkwskcrqq1xoty.public.blob.vercel-storage.com/particle-cloud-turbine-246000pts.json';
+        this.jsonUrl = options.url;
 
         console.log('Point Cloud Viewer Configuration:', {
             jsonUrl: this.jsonUrl,
@@ -67,6 +74,8 @@ export default class JSONPointCloudViewer {
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
+        this.controls.autoRotate = true;
+        this.controls.rotationSpeed = 0.1;
         this.controls.screenSpacePanning = true;
         this.controls.enableZoom = false; // Disable zooming
         this.controls.update();
@@ -97,7 +106,7 @@ export default class JSONPointCloudViewer {
 
     async loadJSONPointCloudFromURL() {
         const error = document.getElementById('error');
-        
+
         try {
             error.style.display = 'none';
 
@@ -111,7 +120,7 @@ export default class JSONPointCloudViewer {
         } catch (err) {
             console.error('Error loading point cloud:', err);
             error.style.display = 'block';
-            
+
             // Hide error after 5 seconds
             setTimeout(() => {
                 error.style.display = 'none';
@@ -130,11 +139,11 @@ export default class JSONPointCloudViewer {
 
         // Create Three.js point cloud from JSON data
         this.particles = this.loadPointCloudFromJSON(jsonData);
-        
+
         if (this.particles) {
             this.scene.add(this.particles);
             this.fitCameraToPointCloud();
-            console.log('Point cloud loaded successfully!');
+            // console.log('Point cloud loaded successfully!');
         } else {
             throw new Error('Could not create point cloud from data');
         }
@@ -142,7 +151,7 @@ export default class JSONPointCloudViewer {
 
     loadPointCloudFromJSON(jsonData) {
         const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
-        
+
         // Validate JSON structure
         if (!data.particles || !data.metadata) {
             console.error('Invalid JSON format: missing particles or metadata');
@@ -152,21 +161,21 @@ export default class JSONPointCloudViewer {
         const particles = data.particles;
         const quantizationFactor = data.metadata.quantizationFactor || 1;
         const originalModelSize = data.metadata.originalModelSize || 1;
-        
+
         const positions = new Float32Array(particles.length * 3);
-        
+
         particles.forEach((point, i) => {
             positions[i * 3] = point[0] / quantizationFactor;
             positions[i * 3 + 1] = point[1] / quantizationFactor;
             positions[i * 3 + 2] = point[2] / quantizationFactor;
         });
-        
+
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        
+
         // Use hardcoded particle size
         const baseSize = this.settings.particleSize * (originalModelSize / 100);
-        
+
         const material = new THREE.PointsMaterial({
             color: new THREE.Color(this.settings.particleColor),
             size: baseSize,
@@ -176,83 +185,150 @@ export default class JSONPointCloudViewer {
             map: this.particleTexture,
             alphaTest: 0.5
         });
-        
+
         return new THREE.Points(geometry, material);
     }
 
     fitCameraToPointCloud() {
         if (!this.particles) return;
-        
+
         // Check if we have saved camera data in the point cloud metadata
         if (this.pointCloudData && this.pointCloudData.metadata && this.pointCloudData.metadata.camera) {
             const cameraData = this.pointCloudData.metadata.camera;
-            
+
             // Apply saved camera settings
             if (cameraData.fov) this.camera.fov = cameraData.fov;
             if (cameraData.near) this.camera.near = cameraData.near;
             if (cameraData.far) this.camera.far = cameraData.far;
             this.camera.updateProjectionMatrix();
-            
+
             // Restore camera position using saved target and spherical coordinates
             const target = new THREE.Vector3(
                 cameraData.target.x,
                 cameraData.target.y,
                 cameraData.target.z
             );
-            
+
             // Calculate camera position from spherical coordinates
             const spherical = new THREE.Spherical(
                 cameraData.distance,
                 cameraData.spherical.phi,
                 cameraData.spherical.theta
             );
-            
+
             const cameraPosition = new THREE.Vector3();
             cameraPosition.setFromSpherical(spherical);
             cameraPosition.add(target);
-            
+
             this.camera.position.copy(cameraPosition);
             this.camera.lookAt(target);
-            
+
             if (this.controls) {
                 this.controls.target.copy(target);
                 this.controls.update();
             }
-            
-            console.log('Camera position restored from saved data');
+
+            // console.log('Camera position restored from saved data');
             return;
         }
-        
+
         // Fallback: Calculate bounding box and auto-fit
         this.particles.geometry.computeBoundingBox();
         const box = this.particles.geometry.boundingBox;
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
-        
+
         const maxSize = Math.max(size.x, size.y, size.z);
         const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * this.camera.fov / 360));
         const fitWidthDistance = fitHeightDistance / this.camera.aspect;
         const distance = 1.2 * Math.max(fitHeightDistance, fitWidthDistance);
-        
+
         // Position camera
         const direction = new THREE.Vector3(1, 1, 1).normalize().multiplyScalar(distance);
         this.camera.position.copy(center).add(direction);
-        
+
         if (this.controls) {
             this.controls.target.copy(center);
             this.controls.update();
         }
-        
-        console.log('Camera auto-fitted to point cloud');
+
+        // console.log('Camera auto-fitted to point cloud');
     }
 
     animate() {
         requestAnimationFrame(() => this.animate());
-        
+
         if (this.controls) {
             this.controls.update();
         }
-        
+
         this.renderer.render(this.scene, this.camera);
+    }
+
+    // Public method to update settings
+    updateSettings(newSettings) {
+        Object.assign(this.settings, newSettings);
+
+        // Update background color
+        if (newSettings.backgroundColor && this.renderer) {
+            this.renderer.setClearColor(new THREE.Color(newSettings.backgroundColor));
+        }
+
+        // Update particle color
+        if (newSettings.particleColor && this.particles) {
+            this.particles.material.color.set(newSettings.particleColor);
+        }
+
+        // Update particle size
+        if (newSettings.particleSize && this.particles && this.pointCloudData) {
+            const originalModelSize = this.pointCloudData.metadata.originalModelSize || 1;
+            const newSize = newSettings.particleSize * (originalModelSize / 100);
+            this.particles.material.size = newSize;
+        }
+    }
+
+    // Public method to load new JSON data
+    async loadNewData(jsonUrl) {
+        this.jsonUrl = jsonUrl;
+        await this.loadJSONPointCloudFromURL();
+    }
+
+    // Cleanup method for proper disposal
+    destroy() {
+        // Stop animation loop
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+
+        // Dispose of Three.js objects
+        if (this.particles) {
+            this.particles.geometry.dispose();
+            this.particles.material.dispose();
+            this.scene.remove(this.particles);
+        }
+
+        if (this.particleTexture) {
+            this.particleTexture.dispose();
+        }
+
+        if (this.renderer) {
+            this.renderer.dispose();
+            if (this.container && this.renderer.domElement.parentNode === this.container) {
+                this.container.removeChild(this.renderer.domElement);
+            }
+        }
+
+        // Clean up resize observer
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+        }
+
+        // Clear container
+        if (this.container) {
+            this.container.innerHTML = '';
+        }
+
+        console.log('JSONPointCloudViewer destroyed');
     }
 }
