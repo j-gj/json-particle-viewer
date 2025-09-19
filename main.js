@@ -92,13 +92,52 @@ export default class JSONPointCloudViewer {
 
     setupResizeObserver() {
         if (typeof ResizeObserver !== 'undefined') {
+            // Debounce resize events to prevent excessive updates
+            let resizeTimeout;
+
             this.resizeObserver = new ResizeObserver(entries => {
-                for (let entry of entries) {
-                    const { width, height } = entry.contentRect;
-                    this.onResize(width, height);
-                }
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    for (let entry of entries) {
+                        const { width, height } = entry.contentRect;
+                        console.log('Resize detected:', width, height); // Debug log
+
+                        // Ensure we have valid dimensions
+                        if (width > 0 && height > 0) {
+                            this.onResize(width, height);
+                        }
+                    }
+                }, 16); // ~60fps throttling
             });
+
             this.resizeObserver.observe(this.container);
+        } else {
+            // Fallback to window resize for older browsers
+            this.windowResizeHandler = () => {
+                if (this.container) {
+                    const rect = this.container.getBoundingClientRect();
+                    this.onResize(rect.width, rect.height);
+                }
+            };
+            window.addEventListener('resize', this.windowResizeHandler);
+        }
+    }
+
+    onResize(width, height) {
+        console.log('Resizing to:', width, height); // Debug log
+
+        if (width > 0 && height > 0 && this.camera && this.renderer) {
+            // Update camera aspect ratio
+            this.camera.aspect = width / height;
+            this.camera.updateProjectionMatrix();
+
+            // Update renderer size
+            this.renderer.setSize(width, height, false); // false prevents CSS size update
+
+            // Force a render
+            if (this.scene) {
+                this.renderer.render(this.scene, this.camera);
+            }
         }
     }
 
@@ -324,6 +363,12 @@ export default class JSONPointCloudViewer {
 
         if (this.resizeObserver) {
             this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
+
+        if (this.windowResizeHandler) {
+            window.removeEventListener('resize', this.windowResizeHandler);
+            this.windowResizeHandler = null;
         }
 
         if (this.container) {

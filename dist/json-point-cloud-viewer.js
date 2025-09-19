@@ -13790,12 +13790,26 @@ class wf {
     this.controls = new Rf(this.camera, this.renderer.domElement), this.controls.enableDamping = !0, this.controls.dampingFactor = 0.05, this.controls.autoRotate = this.settings.autoRotate, this.controls.autoRotateSpeed = this.settings.rotationSpeed, this.controls.screenSpacePanning = !0, this.controls.enableZoom = !1, this.controls.update();
   }
   setupResizeObserver() {
-    typeof ResizeObserver < "u" && (this.resizeObserver = new ResizeObserver((e) => {
-      for (let t of e) {
-        const { width: n, height: r } = t.contentRect;
-        this.onResize(n, r);
-      }
-    }), this.resizeObserver.observe(this.container));
+    if (typeof ResizeObserver < "u") {
+      let e;
+      this.resizeObserver = new ResizeObserver((t) => {
+        clearTimeout(e), e = setTimeout(() => {
+          for (let n of t) {
+            const { width: r, height: s } = n.contentRect;
+            console.log("Resize detected:", r, s), r > 0 && s > 0 && this.onResize(r, s);
+          }
+        }, 16);
+      }), this.resizeObserver.observe(this.container);
+    } else
+      this.windowResizeHandler = () => {
+        if (this.container) {
+          const e = this.container.getBoundingClientRect();
+          this.onResize(e.width, e.height);
+        }
+      }, window.addEventListener("resize", this.windowResizeHandler);
+  }
+  onResize(e, t) {
+    console.log("Resizing to:", e, t), e > 0 && t > 0 && this.camera && this.renderer && (this.camera.aspect = e / t, this.camera.updateProjectionMatrix(), this.renderer.setSize(e, t, !1), this.scene && this.renderer.render(this.scene, this.camera));
   }
   onResize(e, t) {
     e > 0 && t > 0 && (this.camera.aspect = e / t, this.camera.updateProjectionMatrix(), this.renderer.setSize(e, t));
@@ -13881,7 +13895,7 @@ class wf {
     this.jsonUrl = e, await this.loadJSONPointCloudFromURL();
   }
   destroy() {
-    this.animationId && (cancelAnimationFrame(this.animationId), this.animationId = null), this.particles && (this.particles.geometry.dispose(), this.particles.material.dispose(), this.scene.remove(this.particles)), this.particleTexture && this.particleTexture.dispose(), this.renderer && (this.renderer.dispose(), this.container && this.renderer.domElement.parentNode === this.container && this.container.removeChild(this.renderer.domElement)), this.resizeObserver && this.resizeObserver.disconnect(), this.container && (this.container.innerHTML = ""), console.log("JSONPointCloudViewer destroyed");
+    this.animationId && (cancelAnimationFrame(this.animationId), this.animationId = null), this.particles && (this.particles.geometry.dispose(), this.particles.material.dispose(), this.scene.remove(this.particles)), this.particleTexture && this.particleTexture.dispose(), this.renderer && (this.renderer.dispose(), this.container && this.renderer.domElement.parentNode === this.container && this.container.removeChild(this.renderer.domElement)), this.resizeObserver && (this.resizeObserver.disconnect(), this.resizeObserver = null), this.windowResizeHandler && (window.removeEventListener("resize", this.windowResizeHandler), this.windowResizeHandler = null), this.container && (this.container.innerHTML = ""), console.log("JSONPointCloudViewer destroyed");
   }
 }
 export {
